@@ -1,0 +1,397 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>NOAA Reanalysis Products</title>
+<style>
+  :root{
+    --ink:#0c1420;
+    --panel:#101c2c;
+    --panel-2:#152238;
+    --line:#22354d;
+    --fog:#a9bdd4;
+    --paper:#e8eef6;
+    --isobar:#ffb454;
+    --isobar-dim:#7a5a2c;
+    --mono: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+    --sans: "IBM Plex Sans", "Inter", system-ui, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(ellipse 900px 500px at 15% -10%, #16283f 0%, transparent 60%),
+      var(--ink);
+    color:var(--paper);
+    font-family:var(--sans);
+    min-height:100vh;
+  }
+
+  /* isobar signature: repeating contour lines behind the header */
+  .isobar-band{
+    height:64px;
+    width:100%;
+    background:
+      repeating-linear-gradient(
+        180deg,
+        transparent 0px, transparent 10px,
+        var(--isobar-dim) 10px, var(--isobar-dim) 11px
+      );
+    -webkit-mask-image: linear-gradient(180deg, black, transparent);
+    mask-image: linear-gradient(180deg, black, transparent);
+    opacity:0.55;
+  }
+
+  header{
+    padding:28px clamp(20px,4vw,56px) 8px;
+    border-bottom:1px solid var(--line);
+  }
+  .eyebrow{
+    font-family:var(--mono);
+    font-size:12px;
+    letter-spacing:0.14em;
+    text-transform:uppercase;
+    color:var(--isobar);
+    margin:0 0 6px;
+  }
+  h1{
+    margin:0 0 6px;
+    font-size:clamp(28px,3.4vw,40px);
+    font-weight:600;
+    letter-spacing:-0.01em;
+  }
+  .sub{
+    color:var(--fog);
+    font-size:14.5px;
+    margin:0 0 22px;
+    max-width:640px;
+    line-height:1.5;
+  }
+
+  .filters{
+    display:flex;
+    flex-wrap:wrap;
+    gap:10px;
+    padding:18px clamp(20px,4vw,56px);
+    border-bottom:1px solid var(--line);
+    background:var(--panel);
+    position:sticky;
+    top:0;
+    z-index:5;
+  }
+  .field{
+    display:flex;
+    flex-direction:column;
+    gap:4px;
+  }
+  .field label{
+    font-family:var(--mono);
+    font-size:10.5px;
+    letter-spacing:0.08em;
+    text-transform:uppercase;
+    color:var(--fog);
+  }
+  select{
+    background:var(--panel-2);
+    color:var(--paper);
+    border:1px solid var(--line);
+    border-radius:6px;
+    padding:8px 10px;
+    font-family:var(--mono);
+    font-size:13px;
+    min-width:140px;
+  }
+  select:focus-visible, a:focus-visible, button:focus-visible{
+    outline:2px solid var(--isobar);
+    outline-offset:2px;
+  }
+
+  main{ padding:26px clamp(20px,4vw,56px) 60px; }
+
+  .status{
+    font-family:var(--mono);
+    font-size:12.5px;
+    color:var(--fog);
+    margin-bottom:16px;
+  }
+
+  .grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fill, minmax(280px, 1fr));
+    gap:18px;
+  }
+
+  .card{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:10px;
+    overflow:hidden;
+    display:flex;
+    flex-direction:column;
+    transition:border-color 0.15s ease, transform 0.15s ease;
+  }
+  .card:hover{
+    border-color:var(--isobar-dim);
+    transform:translateY(-2px);
+  }
+  .card img{
+    width:100%;
+    aspect-ratio:4/3;
+    object-fit:cover;
+    display:block;
+    background:#08101c;
+  }
+  .card-body{
+    padding:12px 14px 14px;
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+  }
+  .card-title{
+    font-size:14.5px;
+    font-weight:600;
+    letter-spacing:-0.01em;
+  }
+  .tags{
+    display:flex;
+    flex-wrap:wrap;
+    gap:6px;
+    font-family:var(--mono);
+    font-size:10.5px;
+  }
+  .tag{
+    border:1px solid var(--line);
+    color:var(--fog);
+    padding:2px 7px;
+    border-radius:999px;
+    text-transform:uppercase;
+    letter-spacing:0.04em;
+  }
+  .tag.plot-type{ color:var(--isobar); border-color:var(--isobar-dim); }
+
+  .empty, .error{
+    font-family:var(--mono);
+    font-size:13px;
+    color:var(--fog);
+    border:1px dashed var(--line);
+    border-radius:8px;
+    padding:24px;
+    text-align:center;
+  }
+  .error{ color:#ff9e8a; border-color:#5a2c26; }
+
+  a.card-link{ color:inherit; text-decoration:none; }
+</style>
+</head>
+<body>
+
+<div class="isobar-band"></div>
+
+<header>
+  <p class="eyebrow">Agromet &middot; NOAA NCEP Reanalysis</p>
+  <h1>Reanalysis Product Gallery</h1>
+  <p class="sub">
+    Spatial maps, time series, and Hovmoller diagrams generated from NCEP daily
+    pressure-level reanalysis data. Filter by variable, level, aggregation, and
+    year interval below.
+  </p>
+</header>
+
+<div class="filters">
+  <div class="field">
+    <label for="f-var">Variable</label>
+    <select id="f-var"><option value="">All</option></select>
+  </div>
+  <div class="field">
+    <label for="f-level">Level (hPa)</label>
+    <select id="f-level"><option value="">All</option></select>
+  </div>
+  <div class="field">
+    <label for="f-aggr">Aggregation</label>
+    <select id="f-aggr"><option value="">All</option></select>
+  </div>
+  <div class="field">
+    <label for="f-type">Plot type</label>
+    <select id="f-type"><option value="">All</option></select>
+  </div>
+  <div class="field">
+    <label for="f-year-from">From year</label>
+    <select id="f-year-from"><option value="">Any</option></select>
+  </div>
+  <div class="field">
+    <label for="f-year-to">To year</label>
+    <select id="f-year-to"><option value="">Any</option></select>
+  </div>
+</div>
+
+<main>
+  <p class="status" id="status">Loading products&hellip;</p>
+  <div class="grid" id="grid"></div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+  // ---- Configure these two values for your project ----
+  // The anon key is safe to expose publicly: it is read-only thanks to
+  // the Row Level Security policy on noaa_products (see supabase_schema.sql).
+  const SUPABASE_URL = "https://YOUR-PROJECT-REF.supabase.co";
+  const SUPABASE_ANON_KEY = "YOUR-ANON-PUBLIC-KEY";
+  // -------------------------------------------------------
+
+  const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  const VAR_LABELS = {
+    shum: "Specific Humidity", uwnd: "U-Wind", vwnd: "V-Wind",
+    air: "Air Temperature", omega: "Vertical Velocity", hgt: "Geopotential Height",
+    rhum: "Relative Humidity", slp: "Sea Level Pressure",
+    "pres.sfc": "Surface Pressure", "pr_wtr.eatm": "Precipitable Water",
+    "air.sig995": "Surface Air Temperature", "uwnd.sig995": "Surface U-Wind",
+    "vwnd.sig995": "Surface V-Wind", "rhum.sig995": "Surface Relative Humidity",
+    "omega.sig995": "Surface Vertical Velocity",
+    precip: "Rainfall (CHIRPS)",
+  };
+
+  let allProducts = [];
+
+  const els = {
+    grid: document.getElementById("grid"),
+    status: document.getElementById("status"),
+    fVar: document.getElementById("f-var"),
+    fLevel: document.getElementById("f-level"),
+    fAggr: document.getElementById("f-aggr"),
+    fType: document.getElementById("f-type"),
+    fYearFrom: document.getElementById("f-year-from"),
+    fYearTo: document.getElementById("f-year-to"),
+  };
+
+  function uniqueSorted(arr) {
+    return [...new Set(arr.filter(v => v !== null && v !== undefined))].sort();
+  }
+
+  function populateFilters(products) {
+    const fill = (select, values, formatter) => {
+      values.forEach(v => {
+        const opt = document.createElement("option");
+        opt.value = v;
+        opt.textContent = formatter ? formatter(v) : v;
+        select.appendChild(opt);
+      });
+    };
+    fill(els.fVar, uniqueSorted(products.map(p => p.var)), v => VAR_LABELS[v] || v);
+    fill(els.fLevel, uniqueSorted(products.map(p => p.level_label)), v => (/^\d+$/.test(v) ? `${v} hPa` : v));
+    fill(els.fAggr, uniqueSorted(products.map(p => p.aggr)));
+    fill(els.fType, uniqueSorted(products.map(p => p.plot_type)));
+
+    // Build the full span of individual years covered by any product
+    // (e.g. a product spanning 1981-1982 contributes both 1981 and 1982),
+    // so "From year" / "To year" list every selectable year, not just
+    // the start/end values that happen to appear in the data.
+    const starts = products.map(p => p.start_year).filter(v => v != null);
+    const ends = products.map(p => p.end_year).filter(v => v != null);
+    if (starts.length && ends.length) {
+      const minYear = Math.min(...starts);
+      const maxYear = Math.max(...ends);
+      const years = [];
+      for (let y = minYear; y <= maxYear; y++) years.push(y);
+      fill(els.fYearFrom, years);
+      fill(els.fYearTo, years);
+    }
+  }
+
+  function currentFilters() {
+    return {
+      var: els.fVar.value,
+      level: els.fLevel.value,
+      aggr: els.fAggr.value,
+      type: els.fType.value,
+      yearFrom: els.fYearFrom.value ? parseInt(els.fYearFrom.value, 10) : null,
+      yearTo: els.fYearTo.value ? parseInt(els.fYearTo.value, 10) : null,
+    };
+  }
+
+  function render() {
+    const f = currentFilters();
+
+    // Normalize the interval in case "From" is picked after "To"
+    let lo = f.yearFrom, hi = f.yearTo;
+    if (lo !== null && hi !== null && lo > hi) [lo, hi] = [hi, lo];
+
+    const filtered = allProducts.filter(p => {
+      if (lo !== null || hi !== null) {
+        // Product has no year info -- exclude it when a year filter is active
+        if (p.start_year == null || p.end_year == null) return false;
+        // Overlap test: product's [start_year, end_year] intersects [lo, hi]
+        if (lo !== null && p.end_year < lo) return false;
+        if (hi !== null && p.start_year > hi) return false;
+      }
+      return (
+        (!f.var || p.var === f.var) &&
+        (!f.level || String(p.level_label) === f.level) &&
+        (!f.aggr || p.aggr === f.aggr) &&
+        (!f.type || p.plot_type === f.type)
+      );
+    });
+
+    els.status.textContent = `${filtered.length} product${filtered.length === 1 ? "" : "s"}`;
+    els.grid.innerHTML = "";
+
+    if (filtered.length === 0) {
+      const div = document.createElement("div");
+      div.className = "empty";
+      div.textContent = "No products match these filters yet.";
+      els.grid.appendChild(div);
+      return;
+    }
+
+    for (const p of filtered) {
+      const card = document.createElement("a");
+      card.className = "card-link";
+      card.href = p.public_url;
+      card.target = "_blank";
+      card.rel = "noopener";
+
+      const label = VAR_LABELS[p.var] || p.var;
+      card.innerHTML = `
+        <div class="card">
+          <img src="${p.public_url}" alt="${label} ${p.plot_type} plot" loading="lazy" />
+          <div class="card-body">
+            <div class="card-title">${label}${p.level_label ? ` &middot; ${/^\d+$/.test(p.level_label) ? p.level_label + " hPa" : p.level_label}` : ""}</div>
+            <div class="tags">
+              <span class="tag plot-type">${p.plot_type}</span>
+              <span class="tag">${p.aggr}</span>
+              ${p.start_year ? `<span class="tag">${p.start_year}&ndash;${p.end_year}</span>` : ""}
+            </div>
+          </div>
+        </div>
+      `;
+      els.grid.appendChild(card);
+    }
+  }
+
+  async function loadProducts() {
+    const { data, error } = await client
+      .from("noaa_products")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      els.status.textContent = "";
+      els.grid.innerHTML = `<div class="error">Could not load products: ${error.message}</div>`;
+      return;
+    }
+
+    allProducts = data || [];
+    populateFilters(allProducts);
+    render();
+  }
+
+  [els.fVar, els.fLevel, els.fAggr, els.fType, els.fYearFrom, els.fYearTo].forEach(sel =>
+    sel.addEventListener("change", render)
+  );
+
+  loadProducts();
+</script>
+
+</body>
+</html>

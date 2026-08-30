@@ -1,0 +1,408 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Agromet &middot; Data Update Admin</title>
+<style>
+  :root{
+    --ink:#0c1420; --panel:#101c2c; --panel-2:#152238; --line:#22354d;
+    --fog:#a9bdd4; --paper:#e8eef6; --isobar:#ffb454; --isobar-dim:#7a5a2c;
+    --ok:#7ed7a3; --warn:#ffb454; --err:#ff7a7a;
+    --mono: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+    --sans: "IBM Plex Sans", "Inter", system-ui, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;height:100%;}
+  body{
+    background:var(--ink); color:var(--paper); font-family:var(--sans);
+    display:flex; flex-direction:column; min-height:100vh;
+  }
+  header{ padding:20px clamp(16px,3vw,40px) 14px; border-bottom:1px solid var(--line); }
+  .eyebrow{
+    font-family:var(--mono); font-size:12px; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--isobar); margin:0 0 6px;
+  }
+  h1{ margin:0 0 4px; font-size:clamp(22px,2.6vw,30px); font-weight:600; letter-spacing:-.01em; }
+  .sub{ color:var(--fog); font-size:13.5px; margin:0; max-width:680px; line-height:1.5; }
+
+  .wrap{ max-width:920px; margin:0 auto; padding:24px clamp(16px,3vw,32px); flex:1; width:100%; }
+
+  .card{
+    background:var(--panel); border:1px solid var(--line);
+    border-radius:10px; padding:18px; margin-bottom:18px;
+  }
+  .card h2{
+    margin:0 0 10px; font-size:14px; font-family:var(--mono);
+    letter-spacing:.08em; text-transform:uppercase; color:var(--isobar);
+  }
+  .row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .row > * { flex:0 0 auto; }
+
+  .stat{ display:flex; gap:24px; flex-wrap:wrap; font-family:var(--mono); font-size:13px; }
+  .stat .lbl{ color:var(--fog); display:block; font-size:11px; letter-spacing:.08em;
+              text-transform:uppercase; margin-bottom:3px; }
+  .stat .val{ color:var(--paper); }
+  .stat .val.ok{ color:var(--ok); }
+  .stat .val.err{ color:var(--err); }
+  .stat .val.warn{ color:var(--warn); }
+
+  input[type=password]{
+    background:var(--panel-2); color:var(--paper); border:1px solid var(--line);
+    border-radius:6px; padding:9px 12px; font-family:var(--mono); font-size:13px;
+    width:320px; max-width:100%;
+  }
+  button.primary{
+    background:var(--isobar); color:#20140a; border:none; border-radius:7px;
+    padding:10px 18px; font-family:var(--sans); font-weight:600; font-size:14px;
+    cursor:pointer;
+  }
+  button.primary:disabled{ opacity:.45; cursor:not-allowed; }
+  button.ghost{
+    background:transparent; color:var(--fog); border:1px solid var(--line);
+    border-radius:7px; padding:9px 14px; font-family:var(--mono); font-size:12px; cursor:pointer;
+  }
+  button.ghost:hover{ color:var(--paper); border-color:var(--isobar-dim); }
+
+  .log{
+    background:#06090f; border:1px solid var(--line); border-radius:8px;
+    padding:12px 14px; font-family:var(--mono); font-size:12px; line-height:1.55;
+    color:var(--fog); max-height:420px; overflow-y:auto; white-space:pre-wrap;
+  }
+  .log .ts{ color:#5a7088; margin-right:8px; }
+  .log .INFO{ color:var(--fog); }
+  .log .OK{ color:var(--ok); }
+  .log .WARN{ color:var(--warn); }
+  .log .ERROR{ color:var(--err); }
+  .log .section{ color:var(--isobar); font-weight:600; margin-top:6px; display:block; }
+
+  .pill{
+    display:inline-block; padding:3px 9px; border-radius:99px;
+    font-family:var(--mono); font-size:11px; letter-spacing:.06em;
+    text-transform:uppercase; border:1px solid currentColor;
+  }
+  .pill.idle{ color:var(--fog); }
+  .pill.running{ color:var(--isobar); background:#1c2e22; border-color:var(--isobar-dim); }
+  .pill.ok{ color:var(--ok); }
+  .pill.err{ color:var(--err); }
+
+  .help{
+    color:var(--fog); font-size:12.5px; line-height:1.55;
+    border:1px dashed var(--line); border-radius:7px; padding:10px 12px;
+    margin-top:10px;
+  }
+  .help code{ color:var(--isobar); font-size:12px; }
+
+  a{ color:var(--isobar); }
+  footer{ padding:18px; text-align:center; color:var(--fog); font-size:12px; }
+</style>
+</head>
+<body>
+
+<header>
+  <p class="eyebrow">Agromet &middot; Administration</p>
+  <h1>Data Update Console</h1>
+  <p class="sub">
+    Trigger the incremental data update from here. The server pulls only the new
+    days since the last successful run and merges them into the existing
+    aggregated files &mdash; no manual shell access required.
+  </p>
+</header>
+
+<div class="wrap">
+
+  <!-- Auth card -->
+  <div class="card" id="auth-card">
+    <h2>1 &middot; Authenticate</h2>
+    <p style="margin:0 0 12px; color:var(--fog); font-size:13px;">
+      Enter the <code style="color:var(--isobar);">ADMIN_TOKEN</code> that was set
+      on the API server. It's stored in this browser only (localStorage) and
+      sent as the <code style="color:var(--isobar);">X-Admin-Token</code> header
+      on every request.
+    </p>
+    <div class="row">
+      <input type="password" id="token-input" placeholder="paste admin token" />
+      <button class="primary" id="save-token">Save &amp; connect</button>
+      <button class="ghost" id="clear-token">Clear</button>
+    </div>
+    <div class="help" id="auth-help" style="display:none;"></div>
+  </div>
+
+  <!-- Status card -->
+  <div class="card" id="status-card" style="display:none;">
+    <h2>2 &middot; Pipeline status</h2>
+    <div class="stat">
+      <div>
+        <span class="lbl">State</span>
+        <span class="val" id="stat-state"><span class="pill idle">unknown</span></span>
+      </div>
+      <div>
+        <span class="lbl">Last successful update</span>
+        <span class="val" id="stat-last">&mdash;</span>
+      </div>
+      <div>
+        <span class="lbl">Started</span>
+        <span class="val" id="stat-started">&mdash;</span>
+      </div>
+      <div>
+        <span class="lbl">Finished</span>
+        <span class="val" id="stat-finished">&mdash;</span>
+      </div>
+      <div>
+        <span class="lbl">Exit code</span>
+        <span class="val" id="stat-exit">&mdash;</span>
+      </div>
+    </div>
+    <p id="stat-message" style="color:var(--fog); font-size:13px; margin:14px 0 0;"></p>
+  </div>
+
+  <!-- Action card -->
+  <div class="card" id="action-card" style="display:none;">
+    <h2>3 &middot; Trigger update</h2>
+    <p style="margin:0 0 12px; color:var(--fog); font-size:13px;">
+      This runs <code style="color:var(--isobar);">bash all_agro_dataproces.sh update</code>
+      on the server. It probes NOAA and CHIRPS for new data, downloads only what's
+      new, and merges it into the existing aggregations. Typical cost: a few hundred
+      MB and &lt;1 minute on a normal day.
+    </p>
+    <div class="row">
+      <button class="primary" id="start-update">Start incremental update</button>
+      <button class="ghost" id="cancel-update" disabled>Cancel running update</button>
+      <button class="ghost" id="refresh-status">Refresh status</button>
+    </div>
+    <div class="help">
+      Tip: leave this page open &mdash; live progress appears in the log below.
+      After the run, the explorer's dropdowns will pick up the new data
+      automatically on the next request.
+    </div>
+  </div>
+
+  <!-- Live log card -->
+  <div class="card" id="log-card" style="display:none;">
+    <h2>4 &middot; Live log</h2>
+    <div class="log" id="log"><span style="color:#5a7088;">Log is empty. Start an update to see output.</span></div>
+  </div>
+
+</div>
+
+<footer>
+  <a href="gallery.html">Gallery</a> &middot;
+  <a href="explorer.html">Explorer</a> &middot;
+  Updates: <a href="/api/admin/status" target="_blank">/api/admin/status</a>
+</footer>
+
+<script>
+(() => {
+  // ── Config ──────────────────────────────────────────────────────────
+  // The admin endpoint lives on the same host that serves this HTML
+  // (when the API is reverse-proxied) or on a separate host (when
+  // serving the static files elsewhere). If you serve admin.html from
+  // a different origin than the API, change API_BASE here.
+  const API_BASE = (() => {
+    // Default: same host as the page. Override via ?api=... if needed.
+    const u = new URL(window.location.href);
+    return u.searchParams.get("api") || window.location.origin;
+  })();
+
+  const TOKEN_KEY = "agro_admin_token";
+  const $ = (id) => document.getElementById(id);
+
+  // ── Token management ────────────────────────────────────────────────
+  const tokenInput = $("token-input");
+  const savedToken = localStorage.getItem(TOKEN_KEY);
+  if (savedToken) tokenInput.value = savedToken;
+
+  $("save-token").addEventListener("click", () => {
+    const t = tokenInput.value.trim();
+    if (!t) { showAuthHelp("Token can't be empty."); return; }
+    localStorage.setItem(TOKEN_KEY, t);
+    connect();
+  });
+  $("clear-token").addEventListener("click", () => {
+    localStorage.removeItem(TOKEN_KEY);
+    tokenInput.value = "";
+    $("auth-help").style.display = "none";
+    $("status-card").style.display = "none";
+    $("action-card").style.display = "none";
+    $("log-card").style.display = "none";
+  });
+
+  function showAuthHelp(msg) {
+    const h = $("auth-help");
+    h.textContent = msg;
+    h.style.display = "block";
+  }
+
+  function authHeaders(extra = {}) {
+    return { "X-Admin-Token": localStorage.getItem(TOKEN_KEY) || "", ...extra };
+  }
+
+  // ── API calls ──────────────────────────────────────────────────────
+  async function fetchStatus() {
+    const r = await fetch(`${API_BASE}/api/admin/status`, { headers: authHeaders() });
+    if (!r.ok) throw new Error(`status ${r.status}`);
+    return r.json();
+  }
+  async function startUpdate() {
+    const r = await fetch(`${API_BASE}/api/admin/update`, {
+      method: "POST", headers: authHeaders(),
+    });
+    return r.json();
+  }
+  async function cancelUpdate() {
+    const r = await fetch(`${API_BASE}/api/admin/update/cancel`, {
+      method: "POST", headers: authHeaders(),
+    });
+    return r.json();
+  }
+
+  // ── Status rendering ───────────────────────────────────────────────
+  function pillClass(s) {
+    if (s.running) return "running";
+    if (s.exit_code === 0) return "ok";
+    if (s.exit_code !== null && s.exit_code !== undefined) return "err";
+    return "idle";
+  }
+  function pillText(s) {
+    if (s.running) return "running";
+    if (s.exit_code === 0) return "ok";
+    if (s.exit_code !== null && s.exit_code !== undefined) return "failed";
+    return "idle";
+  }
+
+  let pollTimer = null;
+  function startPolling() {
+    if (pollTimer) return;
+    pollTimer = setInterval(refreshStatus, 2000);
+  }
+  function stopPolling() {
+    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+  }
+
+  async function refreshStatus() {
+    try {
+      const s = await fetchStatus();
+      renderStatus(s);
+    } catch (e) {
+      // Token may have been rejected
+      $("stat-state").innerHTML = '<span class="pill err">disconnected</span>';
+    }
+  }
+
+  function renderStatus(s) {
+    $("stat-state").innerHTML = `<span class="pill ${pillClass(s)}">${pillText(s)}</span>`;
+    $("stat-last").textContent = s.last_update || "—";
+    $("stat-started").textContent = s.started_at || "—";
+    $("stat-finished").textContent = s.finished_at || "—";
+    $("stat-exit").textContent = s.exit_code === null || s.exit_code === undefined ? "—" : s.exit_code;
+    $("stat-message").textContent = s.message || "";
+
+    $("start-update").disabled = !!s.running;
+    $("cancel-update").disabled = !s.running;
+  }
+
+  // ── Live log streaming ─────────────────────────────────────────────
+  let es = null;
+  function startLogStream() {
+    if (es) { es.close(); es = null; }
+    // EventSource can't set custom headers, so we pass the token as
+    // a query parameter. The endpoint accepts it from either.
+    const token = encodeURIComponent(localStorage.getItem(TOKEN_KEY) || "");
+    const url = `${API_BASE}/api/admin/update/stream?_t=${Date.now()}&X-Admin-Token=${token}`;
+    $("log").innerHTML = '<span style="color:#5a7088;">Connecting to log stream…</span>';
+    try {
+      es = new EventSource(url);
+    } catch (e) {
+      $("log").textContent = "Could not open log stream: " + e.message;
+      return;
+    }
+    es.onmessage = (ev) => {
+      appendLogLine(ev.data);
+    };
+    es.addEventListener("done", (ev) => {
+      appendLogLine("[stream closed]");
+      es.close(); es = null;
+      // Refresh status one last time
+      refreshStatus();
+    });
+    es.onerror = () => {
+      // EventSource auto-reconnects on transient errors; we just show a hint
+      appendLogLine("[stream interrupted, will retry…]");
+    };
+  }
+  function stopLogStream() {
+    if (es) { es.close(); es = null; }
+  }
+
+  function appendLogLine(line) {
+    const log = $("log");
+    // Remove the empty-state hint on first line
+    if (log.querySelector('span[style*="5a7088"]') &&
+        log.textContent.startsWith("Log is empty") || log.textContent.startsWith("Connecting")) {
+      log.innerHTML = "";
+    }
+    const div = document.createElement("div");
+    // Color-code based on [INFO] / [OK] / [WARN] / [ERROR] / >>>
+    let cls = "INFO";
+    if (/\[\s*OK\s*\]/.test(line)) cls = "OK";
+    else if (/\[\s*WARN\s*\]/.test(line)) cls = "WARN";
+    else if (/\[\s*ERROR\s*\]/.test(line)) cls = "ERROR";
+    else if (/^\s*>>>/.test(line)) cls = "section";
+    div.innerHTML = `<span class="${cls}">${escapeHtml(line)}</span>`;
+    log.appendChild(div);
+    // Auto-scroll only if the user hasn't scrolled up
+    const wasAtBottom = (log.scrollHeight - log.scrollTop - log.clientHeight) < 30;
+    if (wasAtBottom) log.scrollTop = log.scrollHeight;
+  }
+
+  function escapeHtml(s) {
+    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+
+  // ── Wiring ─────────────────────────────────────────────────────────
+  $("start-update").addEventListener("click", async () => {
+    $("start-update").disabled = true;
+    try {
+      const res = await startUpdate();
+      if (res.detail) {
+        alert("Could not start: " + res.detail);
+        $("start-update").disabled = false;
+        return;
+      }
+      startLogStream();
+      startPolling();
+    } catch (e) {
+      alert("Error: " + e.message);
+      $("start-update").disabled = false;
+    }
+  });
+  $("cancel-update").addEventListener("click", async () => {
+    if (!confirm("Cancel the running update?")) return;
+    try { await cancelUpdate(); } catch (e) { alert("Cancel failed: " + e.message); }
+  });
+  $("refresh-status").addEventListener("click", refreshStatus);
+
+  // ── Connect flow ───────────────────────────────────────────────────
+  async function connect() {
+    try {
+      const s = await fetchStatus();
+      renderStatus(s);
+      $("status-card").style.display = "block";
+      $("action-card").style.display = "block";
+      $("log-card").style.display = "block";
+      $("auth-help").style.display = "none";
+      startPolling();
+    } catch (e) {
+      showAuthHelp(
+        "Could not reach the API or the token was rejected. " +
+        "Check that the API is running and that the token matches the " +
+        "ADMIN_TOKEN env var on the server. (Error: " + e.message + ")"
+      );
+    }
+  }
+
+  if (savedToken) connect();
+})();
+</script>
+</body>
+</html>

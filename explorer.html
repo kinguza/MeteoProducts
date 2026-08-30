@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>NOAA Reanalysis Explorer</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+  :root{
+    --ink:#0c1420; --panel:#101c2c; --panel-2:#152238; --line:#22354d;
+    --fog:#a9bdd4; --paper:#e8eef6; --isobar:#ffb454; --isobar-dim:#7a5a2c;
+    --mono: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+    --sans: "IBM Plex Sans", "Inter", system-ui, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;height:100%;}
+  body{
+    background:var(--ink); color:var(--paper); font-family:var(--sans);
+    display:flex; flex-direction:column; min-height:100vh;
+  }
+  header{ padding:20px clamp(16px,3vw,40px) 14px; border-bottom:1px solid var(--line); }
+  .eyebrow{
+    font-family:var(--mono); font-size:12px; letter-spacing:0.14em;
+    text-transform:uppercase; color:var(--isobar); margin:0 0 6px;
+  }
+  h1{ margin:0 0 4px; font-size:clamp(22px,2.6vw,30px); font-weight:600; letter-spacing:-0.01em; }
+  .sub{ color:var(--fog); font-size:13.5px; margin:0; max-width:680px; line-height:1.5; }
+
+  .layout{
+    flex:1; display:grid; grid-template-columns:340px 1fr; gap:0;
+    min-height:0;
+  }
+  @media (max-width:820px){ .layout{ grid-template-columns:1fr; } }
+
+  .sidebar{
+    border-right:1px solid var(--line); padding:18px; overflow-y:auto;
+    display:flex; flex-direction:column; gap:16px; background:var(--panel);
+  }
+
+  .mode-toggle{ display:flex; gap:8px; }
+  .mode-btn{
+    flex:1; padding:9px 8px; border-radius:7px; border:1px solid var(--line);
+    background:var(--panel-2); color:var(--fog); font-family:var(--mono);
+    font-size:12px; cursor:pointer; text-transform:uppercase; letter-spacing:0.04em;
+  }
+  .mode-btn.active{ color:var(--isobar); border-color:var(--isobar-dim); background:#1c2e22; }
+
+  .field{ display:flex; flex-direction:column; gap:4px; }
+  .field label{
+    font-family:var(--mono); font-size:10.5px; letter-spacing:0.08em;
+    text-transform:uppercase; color:var(--fog);
+  }
+  select, input[type=text], input[type=date]{
+    background:var(--panel-2); color:var(--paper); border:1px solid var(--line);
+    border-radius:6px; padding:8px 10px; font-family:var(--mono); font-size:13px; width:100%;
+  }
+  .row2{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+
+  .hint{
+    font-family:var(--mono); font-size:11.5px; color:var(--fog);
+    border:1px dashed var(--line); border-radius:7px; padding:10px 11px; line-height:1.5;
+  }
+
+  .coords{
+    font-family:var(--mono); font-size:12.5px; color:var(--paper);
+    background:var(--panel-2); border:1px solid var(--line); border-radius:7px;
+    padding:10px 11px;
+  }
+  .coords .muted{ color:var(--fog); }
+
+  button.primary{
+    background:var(--isobar); color:#20140a; border:none; border-radius:7px;
+    padding:11px 14px; font-family:var(--sans); font-weight:600; font-size:14px;
+    cursor:pointer;
+  }
+  button.primary:disabled{ opacity:0.45; cursor:not-allowed; }
+  button.ghost{
+    background:transparent; color:var(--fog); border:1px solid var(--line);
+    border-radius:7px; padding:9px 12px; font-family:var(--mono); font-size:12px; cursor:pointer;
+  }
+
+  #map{ width:100%; height:100%; min-height:340px; }
+
+  .result{
+    border-top:1px solid var(--line); padding:16px 18px; background:var(--panel);
+  }
+  .result img{ max-width:100%; border-radius:8px; border:1px solid var(--line); display:block; }
+  .status{ font-family:var(--mono); font-size:12.5px; color:var(--fog); margin:0 0 10px; }
+  .status.error{ color:#ff9e8a; }
+
+  .spinner{
+    width:14px; height:14px; border:2px solid var(--isobar-dim);
+    border-top-color:var(--isobar); border-radius:50%;
+    display:inline-block; vertical-align:-2px; margin-right:8px;
+    animation:spin 0.8s linear infinite;
+  }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<header>
+  <p class="eyebrow">Agromet &middot; NOAA NCEP Reanalysis</p>
+  <h1>Live Reanalysis Explorer</h1>
+  <p class="sub">
+    Click the map for a time series at any point, or draw a box for a spatial
+    map of any region. Plots are generated on the fly from the full data
+    record.
+  </p>
+</header>
+
+<div class="layout">
+  <div class="sidebar">
+    <div class="mode-toggle">
+      <button class="mode-btn active" id="mode-point">Point &middot; Time series</button>
+      <button class="mode-btn" id="mode-region">Region &middot; Spatial map</button>
+    </div>
+
+    <div class="field">
+      <label for="sel-var">Variable</label>
+      <select id="sel-var"></select>
+    </div>
+    <div class="row2">
+      <div class="field">
+        <label for="sel-level">Level (hPa)</label>
+        <select id="sel-level"></select>
+      </div>
+      <div class="field">
+        <label for="sel-aggr">Aggregation</label>
+        <select id="sel-aggr"></select>
+      </div>
+    </div>
+    <div class="row2">
+      <div class="field">
+        <label for="date-start">Start date (optional)</label>
+        <input type="date" id="date-start" />
+      </div>
+      <div class="field">
+        <label for="date-end">End date (optional)</label>
+        <input type="date" id="date-end" />
+      </div>
+    </div>
+
+    <div id="hint-point" class="hint">Click anywhere on the map to choose a point.</div>
+    <div id="hint-region" class="hint" style="display:none;">
+      Click once for the first corner, click again for the opposite corner.
+      Click "Reset selection" to start over.
+    </div>
+
+    <div class="coords" id="coords">No selection yet</div>
+
+    <button class="ghost" id="btn-reset">Reset selection</button>
+    <button class="primary" id="btn-generate" disabled>Generate plot</button>
+  </div>
+
+  <div id="map"></div>
+</div>
+
+<div class="result" id="result" style="display:none;">
+  <p class="status" id="status"></p>
+  <img id="result-img" alt="Generated plot" />
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+  // ---- Configure this for your deployment ----
+  // Where plot_api.py (FastAPI) is reachable. Use HTTPS in production.
+  const API_BASE = "https://your-plot-api.example.com";
+  // ---------------------------------------------
+
+  const VAR_LABELS = {
+    shum: "Specific Humidity", uwnd: "U-Wind", vwnd: "V-Wind",
+    air: "Air Temperature", omega: "Vertical Velocity", hgt: "Geopotential Height",
+    rhum: "Relative Humidity", slp: "Sea Level Pressure",
+    "pres.sfc": "Surface Pressure", "pr_wtr.eatm": "Precipitable Water",
+    "air.sig995": "Surface Air Temperature", "uwnd.sig995": "Surface U-Wind",
+    "vwnd.sig995": "Surface V-Wind", "rhum.sig995": "Surface Relative Humidity",
+    "omega.sig995": "Surface Vertical Velocity",
+    precip: "Rainfall (CHIRPS)",
+  };
+
+  let combos = [];
+  let mode = "point"; // "point" | "region"
+  let point = null;              // {lat, lon}
+  let corner1 = null, corner2 = null;
+  let marker = null, rect = null;
+
+  const els = {
+    selVar: document.getElementById("sel-var"),
+    selLevel: document.getElementById("sel-level"),
+    selAggr: document.getElementById("sel-aggr"),
+    dateStart: document.getElementById("date-start"),
+    dateEnd: document.getElementById("date-end"),
+    hintPoint: document.getElementById("hint-point"),
+    hintRegion: document.getElementById("hint-region"),
+    coords: document.getElementById("coords"),
+    btnReset: document.getElementById("btn-reset"),
+    btnGenerate: document.getElementById("btn-generate"),
+    result: document.getElementById("result"),
+    status: document.getElementById("status"),
+    resultImg: document.getElementById("result-img"),
+    modePoint: document.getElementById("mode-point"),
+    modeRegion: document.getElementById("mode-region"),
+  };
+
+  const map = L.map("map", { worldCopyJump: true }).setView([20, 80], 3);
+  L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+    attribution: "&copy; OpenStreetMap &copy; CARTO",
+    maxZoom: 8,
+  }).addTo(map);
+
+  function setMode(next) {
+    mode = next;
+    els.modePoint.classList.toggle("active", mode === "point");
+    els.modeRegion.classList.toggle("active", mode === "region");
+    els.hintPoint.style.display = mode === "point" ? "block" : "none";
+    els.hintRegion.style.display = mode === "region" ? "block" : "none";
+    resetSelection();
+  }
+  els.modePoint.addEventListener("click", () => setMode("point"));
+  els.modeRegion.addEventListener("click", () => setMode("region"));
+
+  function resetSelection() {
+    point = null; corner1 = null; corner2 = null;
+    if (marker) { map.removeLayer(marker); marker = null; }
+    if (rect) { map.removeLayer(rect); rect = null; }
+    els.coords.textContent = "No selection yet";
+    els.btnGenerate.disabled = true;
+    els.result.style.display = "none";
+  }
+  els.btnReset.addEventListener("click", resetSelection);
+
+  map.on("click", (e) => {
+    const { lat, lng } = e.latlng;
+    if (mode === "point") {
+      point = { lat, lon: lng };
+      if (marker) map.removeLayer(marker);
+      marker = L.circleMarker([lat, lng], { radius: 6, color: "#ffb454", fillOpacity: 0.9 }).addTo(map);
+      els.coords.innerHTML = `lat <b>${lat.toFixed(2)}</b>, lon <b>${lng.toFixed(2)}</b>`;
+      els.btnGenerate.disabled = false;
+    } else {
+      if (!corner1 || (corner1 && corner2)) {
+        // start a fresh box
+        corner1 = { lat, lon: lng };
+        corner2 = null;
+        if (rect) { map.removeLayer(rect); rect = null; }
+        els.coords.textContent = "First corner set \u2014 click the opposite corner";
+        els.btnGenerate.disabled = true;
+      } else {
+        corner2 = { lat, lon: lng };
+        const bounds = [[corner1.lat, corner1.lon], [corner2.lat, corner2.lon]];
+        if (rect) map.removeLayer(rect);
+        rect = L.rectangle(bounds, { color: "#ffb454", weight: 2, fillOpacity: 0.08 }).addTo(map);
+        const latMin = Math.min(corner1.lat, corner2.lat).toFixed(2);
+        const latMax = Math.max(corner1.lat, corner2.lat).toFixed(2);
+        const lonMin = Math.min(corner1.lon, corner2.lon).toFixed(2);
+        const lonMax = Math.max(corner1.lon, corner2.lon).toFixed(2);
+        els.coords.innerHTML = `lat <b>${latMin}</b>&ndash;<b>${latMax}</b>, lon <b>${lonMin}</b>&ndash;<b>${lonMax}</b>`;
+        els.btnGenerate.disabled = false;
+      }
+    }
+  });
+
+  // ── Populate var/level/aggr from what the API says actually has data ──────
+  async function loadMeta() {
+    try {
+      const res = await fetch(`${API_BASE}/api/meta`);
+      const data = await res.json();
+      combos = data.combos || [];
+    } catch (e) {
+      combos = [];
+    }
+
+    const vars = [...new Set(combos.map(c => c.var))].sort();
+    els.selVar.innerHTML = vars.map(v => `<option value="${v}">${VAR_LABELS[v] || v}</option>`).join("");
+    updateLevels();
+  }
+
+  function updateLevels() {
+    const v = els.selVar.value;
+    const levels = [...new Set(combos.filter(c => c.var === v).map(c => c.level))].sort((a, b) => a - b);
+    els.selLevel.innerHTML = levels.map(l => `<option value="${l}">${l} hPa</option>`).join("");
+    updateAggrs();
+  }
+
+  function updateAggrs() {
+    const v = els.selVar.value, l = els.selLevel.value;
+    const aggrs = [...new Set(combos.filter(c => c.var === v && c.level === l).map(c => c.aggr))].sort();
+    els.selAggr.innerHTML = aggrs.map(a => `<option value="${a}">${a}</option>`).join("");
+  }
+
+  els.selVar.addEventListener("change", updateLevels);
+  els.selLevel.addEventListener("change", updateAggrs);
+
+  // ── Generate ────────────────────────────────────────────────────────────
+  els.btnGenerate.addEventListener("click", async () => {
+    els.btnGenerate.disabled = true;
+    els.result.style.display = "block";
+    els.status.className = "status";
+    els.status.innerHTML = `<span class="spinner"></span>Generating plot\u2026 this can take a few seconds.`;
+    els.resultImg.style.display = "none";
+
+    const var_ = els.selVar.value, level = els.selLevel.value, aggr = els.selAggr.value;
+    const start = els.dateStart.value || null;
+    const end = els.dateEnd.value || null;
+
+    let url, body;
+    if (mode === "point") {
+      url = `${API_BASE}/api/timeseries`;
+      body = { var: var_, level, aggr, lat: point.lat, lon: point.lon, start, end };
+    } else {
+      url = `${API_BASE}/api/spatial`;
+      body = {
+        var: var_, level, aggr,
+        lat_min: Math.min(corner1.lat, corner2.lat), lat_max: Math.max(corner1.lat, corner2.lat),
+        lon_min: Math.min(corner1.lon, corner2.lon), lon_max: Math.max(corner1.lon, corner2.lon),
+        start, end,
+      };
+    }
+
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `Request failed (${res.status})`);
+      }
+      const blob = await res.blob();
+      els.resultImg.src = URL.createObjectURL(blob);
+      els.resultImg.style.display = "block";
+      els.status.textContent = "";
+    } catch (e) {
+      els.status.className = "status error";
+      els.status.textContent = `Could not generate plot: ${e.message}`;
+    } finally {
+      els.btnGenerate.disabled = false;
+    }
+  });
+
+  loadMeta();
+</script>
+
+</body>
+</html>
