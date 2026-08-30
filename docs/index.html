@@ -1,1 +1,796 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="description" content="Agrometeorological reanalysis products for East Africa: NOAA NCEP reanalysis and CHIRPS rainfall, served as spatial maps, time series, and Hovmoller diagrams." />
+<title>Agromet &middot; Reanalysis Products for East Africa</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  /* ── Tokens ──────────────────────────────────────────────────────── */
+  :root{
+    --ink:#0c1420; --ink-2:#06090f;
+    --panel:#101c2c; --panel-2:#152238; --panel-3:#1a2c44;
+    --line:#22354d; --line-2:#2d4564;
+    --fog:#a9bdd4; --paper:#e8eef6; --paper-2:#f5f8fc;
+    --isobar:#ffb454; --isobar-dim:#7a5a2c; --isobar-glow:rgba(255,180,84,0.18);
+    --ok:#7ed7a3; --warn:#ffb454; --err:#ff7a7a;
+    --shadow-1: 0 1px 0 rgba(255,255,255,0.04) inset, 0 6px 16px rgba(0,0,0,0.35);
+    --shadow-2: 0 1px 0 rgba(255,255,255,0.05) inset, 0 16px 40px rgba(0,0,0,0.45);
+    --mono: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+    --sans: "IBM Plex Sans", "Inter", system-ui, sans-serif;
+  }
+
+  /* ── Reset ──────────────────────────────────────────────────────── */
+  *,*::before,*::after{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  html{scroll-behavior:smooth;}
+  body{
+    background:
+      radial-gradient(1100px 600px at 12% -10%, #16283f 0%, transparent 55%),
+      radial-gradient(900px 500px at 95% 0%,   #1c2942 0%, transparent 60%),
+      radial-gradient(800px 600px at 60% 110%, #122035 0%, transparent 60%),
+      var(--ink);
+    color:var(--paper);
+    font-family:var(--sans);
+    font-size:16px;
+    line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+    min-height:100vh;
+    overflow-x:hidden;
+  }
+  a{color:var(--isobar);text-decoration:none;}
+  a:hover{text-decoration:underline;}
+  img{max-width:100%;display:block;}
+
+  /* ── Isobar band (signature) ───────────────────────────────────── */
+  .isobar-band{
+    height:72px;width:100%;
+    background:repeating-linear-gradient(
+      180deg,
+      transparent 0px, transparent 10px,
+      var(--isobar-dim) 10px, var(--isobar-dim) 11px);
+    -webkit-mask-image:linear-gradient(180deg,black,transparent);
+            mask-image:linear-gradient(180deg,black,transparent);
+    opacity:.6;
+  }
+
+  /* ── Top nav ───────────────────────────────────────────────────── */
+  .topnav{
+    position:sticky;top:0;z-index:10;
+    background:rgba(6,9,15,0.72);
+    -webkit-backdrop-filter:saturate(160%) blur(12px);
+            backdrop-filter:saturate(160%) blur(12px);
+    border-bottom:1px solid var(--line);
+  }
+  .topnav-inner{
+    max-width:1240px;margin:0 auto;
+    padding:14px clamp(20px,4vw,40px);
+    display:flex;align-items:center;gap:18px;
+  }
+  .brand{
+    display:flex;align-items:center;gap:10px;
+    font-weight:600;letter-spacing:-.01em;
+    color:var(--paper);
+  }
+  .brand-mark{
+    width:28px;height:28px;border-radius:7px;
+    background:linear-gradient(135deg,#1a2c44 0%, #2a4a72 100%);
+    border:1px solid var(--line-2);
+    display:grid;place-items:center;
+    color:var(--isobar);
+  }
+  .brand-name{font-size:15.5px;}
+  .brand-name b{color:var(--isobar);font-weight:600;}
+  .navlinks{
+    margin-left:auto;display:flex;gap:6px;flex-wrap:wrap;
+  }
+  .navlinks a{
+    color:var(--fog);font-size:13.5px;font-weight:500;
+    padding:7px 12px;border-radius:7px;
+    font-family:var(--mono);letter-spacing:.02em;
+  }
+  .navlinks a:hover{color:var(--paper);background:var(--panel-2);text-decoration:none;}
+
+  /* ── Hero ───────────────────────────────────────────────────────── */
+  .hero{
+    max-width:1240px;margin:0 auto;
+    padding:64px clamp(20px,4vw,40px) 40px;
+  }
+  .eyebrow{
+    font-family:var(--mono);font-size:12px;letter-spacing:.18em;
+    text-transform:uppercase;color:var(--isobar);
+    display:inline-flex;align-items:center;gap:10px;
+  }
+  .eyebrow::before{
+    content:"";display:inline-block;width:24px;height:1px;background:var(--isobar);
+  }
+  .hero h1{
+    margin:18px 0 14px;
+    font-size:clamp(34px,5vw,56px);
+    font-weight:600;letter-spacing:-.018em;line-height:1.05;
+    max-width:18ch;
+  }
+  .hero h1 .accent{
+    background:linear-gradient(120deg,var(--isobar) 0%, #ffd28a 100%);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+  }
+  .hero .lede{
+    color:var(--fog);font-size:clamp(16px,1.6vw,18.5px);
+    max-width:62ch;line-height:1.55;margin:0 0 28px;
+  }
+  .hero-actions{display:flex;flex-wrap:wrap;gap:10px;margin:8px 0 0;}
+  .btn{
+    display:inline-flex;align-items:center;gap:9px;
+    padding:12px 18px;border-radius:9px;
+    font-family:var(--sans);font-weight:600;font-size:14.5px;
+    border:1px solid transparent;cursor:pointer;
+    transition:transform .12s ease, background .12s ease, border-color .12s ease;
+  }
+  .btn:hover{transform:translateY(-1px);text-decoration:none;}
+  .btn-primary{
+    background:var(--isobar);color:#20140a;
+    box-shadow:0 0 0 4px var(--isobar-glow), 0 6px 16px rgba(255,180,84,0.15);
+  }
+  .btn-primary:hover{background:#ffc370;}
+  .btn-ghost{
+    background:transparent;color:var(--paper);
+    border-color:var(--line-2);
+  }
+  .btn-ghost:hover{background:var(--panel-2);border-color:var(--isobar-dim);}
+  .btn .arrow{font-family:var(--mono);font-size:13px;opacity:.8;}
+
+  /* ── Live stat strip ─────────────────────────────────────────── */
+  .stat-strip{
+    max-width:1240px;margin:36px auto 0;
+    padding:0 clamp(20px,4vw,40px);
+    display:grid;grid-template-columns:repeat(4,1fr);gap:14px;
+  }
+  @media (max-width:780px){.stat-strip{grid-template-columns:repeat(2,1fr);}}
+  .stat-card{
+    background:linear-gradient(180deg,var(--panel) 0%, var(--panel-2) 100%);
+    border:1px solid var(--line);
+    border-radius:11px;padding:18px 18px 16px;
+    box-shadow:var(--shadow-1);
+  }
+  .stat-card .lbl{
+    font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--fog);margin:0 0 6px;
+  }
+  .stat-card .val{
+    font-family:var(--mono);font-weight:500;font-size:24px;
+    color:var(--paper);line-height:1.1;
+  }
+  .stat-card .sub{
+    font-family:var(--mono);font-size:11.5px;color:var(--fog);
+    margin-top:5px;
+  }
+  .stat-card .pulse{
+    display:inline-block;width:7px;height:7px;border-radius:50%;
+    background:var(--ok);margin-right:6px;vertical-align:middle;
+    box-shadow:0 0 0 0 rgba(126,215,163,0.7);
+    animation:pulse 1.8s ease-out infinite;
+  }
+  @keyframes pulse{
+    0%  {box-shadow:0 0 0 0 rgba(126,215,163,0.6);}
+    70% {box-shadow:0 0 0 9px rgba(126,215,163,0);}
+    100%{box-shadow:0 0 0 0 rgba(126,215,163,0);}
+  }
+
+  /* ── Section scaffolding ─────────────────────────────────────── */
+  section{
+    max-width:1240px;margin:0 auto;
+    padding:64px clamp(20px,4vw,40px);
+  }
+  .section-head{
+    display:flex;align-items:flex-end;justify-content:space-between;
+    flex-wrap:wrap;gap:14px;margin:0 0 24px;
+    border-bottom:1px solid var(--line);padding-bottom:16px;
+  }
+  .section-head h2{
+    margin:0;font-size:clamp(22px,2.2vw,28px);
+    font-weight:600;letter-spacing:-.01em;
+  }
+  .section-head .kicker{
+    font-family:var(--mono);font-size:11px;letter-spacing:.18em;
+    text-transform:uppercase;color:var(--isobar);
+    margin:0 0 4px;
+  }
+  .section-head p{margin:0;color:var(--fog);font-size:14px;max-width:60ch;}
+
+  /* ── Feature cards ───────────────────────────────────────────── */
+  .features{
+    display:grid;grid-template-columns:repeat(3,1fr);gap:18px;
+  }
+  @media (max-width:920px){.features{grid-template-columns:1fr;}}
+  .feature{
+    background:var(--panel);
+    border:1px solid var(--line);border-radius:12px;
+    padding:22px;display:flex;flex-direction:column;gap:14px;
+    box-shadow:var(--shadow-1);
+    transition:border-color .15s ease, transform .15s ease;
+  }
+  .feature:hover{border-color:var(--isobar-dim);transform:translateY(-2px);}
+  .feature .icon{
+    width:42px;height:42px;border-radius:10px;
+    display:grid;place-items:center;
+    background:linear-gradient(135deg,#1c2e45 0%, #233a5a 100%);
+    border:1px solid var(--line-2);
+    color:var(--isobar);
+  }
+  .feature h3{margin:0;font-size:17px;font-weight:600;letter-spacing:-.005em;}
+  .feature p{margin:0;color:var(--fog);font-size:14px;line-height:1.55;}
+  .feature .go{
+    margin-top:auto;font-family:var(--mono);font-size:12.5px;
+    color:var(--isobar);display:inline-flex;align-items:center;gap:6px;
+  }
+  .feature .go::after{content:"→";transition:transform .12s ease;}
+  .feature:hover .go::after{transform:translateX(3px);}
+
+  /* ── Sample product showcase ────────────────────────────────── */
+  .sample-grid{
+    display:grid;grid-template-columns:repeat(3,1fr);gap:16px;
+  }
+  @media (max-width:900px){.sample-grid{grid-template-columns:repeat(2,1fr);}}
+  @media (max-width:560px){.sample-grid{grid-template-columns:1fr;}}
+  .sample{
+    background:var(--panel);
+    border:1px solid var(--line);border-radius:11px;
+    overflow:hidden;display:flex;flex-direction:column;
+    transition:transform .15s ease, border-color .15s ease;
+  }
+  .sample:hover{transform:translateY(-2px);border-color:var(--isobar-dim);}
+  .sample img{
+    width:100%;aspect-ratio:4/3;object-fit:cover;
+    background:#08101c;
+  }
+  .sample .meta{
+    padding:10px 12px 12px;
+    display:flex;flex-direction:column;gap:6px;
+  }
+  .sample .title{
+    font-size:14px;font-weight:600;letter-spacing:-.005em;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .sample .tags{display:flex;flex-wrap:wrap;gap:5px;font-family:var(--mono);font-size:10.5px;}
+  .tag{
+    border:1px solid var(--line);color:var(--fog);
+    padding:2px 7px;border-radius:99px;
+    text-transform:uppercase;letter-spacing:.04em;
+  }
+  .tag.plot-type{color:var(--isobar);border-color:var(--isobar-dim);}
+  .sample-empty{
+    grid-column:1 / -1;
+    text-align:center;color:var(--fog);
+    border:1px dashed var(--line);border-radius:11px;
+    padding:30px;font-family:var(--mono);font-size:13.5px;
+  }
+  .sample-empty code{color:var(--isobar);}
+
+  /* ── Data sources strip ─────────────────────────────────────── */
+  .sources{
+    display:grid;grid-template-columns:repeat(2,1fr);gap:16px;
+  }
+  @media (max-width:780px){.sources{grid-template-columns:1fr;}}
+  .src{
+    background:var(--panel);border:1px solid var(--line);
+    border-radius:11px;padding:18px;
+    display:flex;gap:14px;align-items:flex-start;
+  }
+  .src .logo{
+    width:46px;height:46px;flex:0 0 auto;border-radius:9px;
+    background:linear-gradient(135deg,#1a2c44,#233a5a);
+    border:1px solid var(--line-2);
+    display:grid;place-items:center;font-family:var(--mono);
+    font-weight:600;color:var(--isobar);font-size:13px;
+  }
+  .src h4{margin:0 0 4px;font-size:15px;}
+  .src p{margin:0;color:var(--fog);font-size:13.5px;line-height:1.5;}
+  .src .meta-line{
+    font-family:var(--mono);font-size:11.5px;color:var(--fog);
+    margin-top:8px;
+  }
+  .src .meta-line b{color:var(--paper);font-weight:500;}
+
+  /* ── Capabilities list ─────────────────────────────────────── */
+  .caps{
+    display:grid;grid-template-columns:repeat(2,1fr);gap:8px 24px;
+  }
+  @media (max-width:780px){.caps{grid-template-columns:1fr;}}
+  .cap{
+    display:flex;gap:11px;padding:12px 0;
+    border-bottom:1px solid var(--line);
+  }
+  .cap:last-child{border-bottom:none;}
+  .cap .check{
+    flex:0 0 auto;width:20px;height:20px;border-radius:50%;
+    background:#1c2e22;border:1px solid #2c4a36;
+    color:var(--ok);display:grid;place-items:center;
+    font-size:11px;font-weight:700;
+  }
+  .cap .ctext strong{display:block;font-weight:600;font-size:14.5px;margin-bottom:2px;}
+  .cap .ctext span{color:var(--fog);font-size:13.5px;}
+
+  /* ── Footer ────────────────────────────────────────────────── */
+  footer{
+    border-top:1px solid var(--line);
+    background:rgba(6,9,15,0.6);
+    padding:36px clamp(20px,4vw,40px);
+    margin-top:32px;
+  }
+  .foot-inner{
+    max-width:1240px;margin:0 auto;
+    display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:30px;
+  }
+  @media (max-width:780px){.foot-inner{grid-template-columns:1fr;}}
+  .foot h5{
+    margin:0 0 12px;font-family:var(--mono);font-size:11px;
+    letter-spacing:.14em;text-transform:uppercase;color:var(--isobar);
+  }
+  .foot ul{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:7px;}
+  .foot ul a{color:var(--fog);font-size:13.5px;}
+  .foot ul a:hover{color:var(--paper);}
+  .foot .small{color:var(--fog);font-size:12.5px;line-height:1.6;}
+  .foot .small code{color:var(--isobar);font-size:12px;}
+  .foot-bottom{
+    max-width:1240px;margin:24px auto 0;padding-top:18px;
+    border-top:1px solid var(--line);
+    display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px;
+    color:var(--fog);font-size:12.5px;font-family:var(--mono);
+  }
+
+  /* ── Misc ─────────────────────────────────────────────────── */
+  ::selection{background:var(--isobar);color:#20140a;}
+  .visually-hidden{
+    position:absolute;width:1px;height:1px;padding:0;margin:-1px;
+    overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;
+  }
+</style>
+</head>
+<body>
+
+<div class="isobar-band" aria-hidden="true"></div>
+
+<nav class="topnav" aria-label="Primary">
+  <div class="topnav-inner">
+    <a class="brand" href="index.html" aria-label="Agromet home">
+      <span class="brand-mark" aria-hidden="true">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 17c2-2 4-2 6 0s4 2 6 0 4-2 6 0"/>
+          <path d="M3 12c2-2 4-2 6 0s4 2 6 0 4-2 6 0"/>
+          <path d="M3 7c2-2 4-2 6 0s4 2 6 0 4-2 6 0"/>
+        </svg>
+      </span>
+      <span class="brand-name">Agromet <b>·</b> Reanalysis</span>
+    </a>
+    <div class="navlinks">
+      <a href="#explore">Explore</a>
+      <a href="gallery.html">Gallery</a>
+      <a href="explorer.html">Live</a>
+      <a href="admin.html">Admin</a>
+      <a href="#sources">Sources</a>
+    </div>
+  </div>
+</nav>
+
+<!-- ── Hero ───────────────────────────────────────────────────── -->
+<header class="hero">
+  <p class="eyebrow">NOAA NCEP Reanalysis I &middot; CHIRPS v2.0</p>
+  <h1>
+    Agrometeorological products for <span class="accent">East Africa</span>, refreshed daily.
+  </h1>
+  <p class="lede">
+    Spatial maps, time series, and Hovmoller diagrams derived from
+    eight decades of NCEP reanalysis and four decades of CHIRPS satellite
+    rainfall. Click any point or draw any region on the map to generate
+    a live plot &mdash; or browse the pre-rendered gallery.
+  </p>
+  <div class="hero-actions">
+    <a class="btn btn-primary" href="explorer.html">
+      Open the live explorer <span class="arrow">&rarr;</span>
+    </a>
+    <a class="btn btn-ghost" href="gallery.html">
+      Browse the gallery <span class="arrow">&rarr;</span>
+    </a>
+  </div>
+
+  <div class="stat-strip" id="stat-strip" aria-live="polite">
+    <div class="stat-card">
+      <p class="lbl">Products in catalog</p>
+      <p class="val" id="stat-count">—</p>
+      <p class="sub" id="stat-count-sub">Loading from Supabase…</p>
+    </div>
+    <div class="stat-card">
+      <p class="lbl">Variables</p>
+      <p class="val" id="stat-vars">—</p>
+      <p class="sub">NOAA pressure + surface + CHIRPS</p>
+    </div>
+    <div class="stat-card">
+      <p class="lbl">Latest ingest</p>
+      <p class="val" id="stat-latest">—</p>
+      <p class="sub"><span class="pulse" aria-hidden="true"></span>Live &middot; updates daily</p>
+    </div>
+    <div class="stat-card">
+      <p class="lbl">Year coverage</p>
+      <p class="val" id="stat-years">—</p>
+      <p class="sub">From earliest to latest product</p>
+    </div>
+  </div>
+</header>
+
+<!-- ── What you can do here ──────────────────────────────────── -->
+<section id="explore" aria-labelledby="explore-h">
+  <div class="section-head">
+    <div>
+      <p class="kicker">What you can do here</p>
+      <h2 id="explore-h">Three ways to work with the data</h2>
+    </div>
+    <p>Pick the workflow that matches what you're trying to do today.</p>
+  </div>
+
+  <div class="features">
+    <a class="feature" href="explorer.html" style="color:inherit;text-decoration:none;">
+      <div class="icon" aria-hidden="true">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>
+          <circle cx="12" cy="12" r="6"/>
+        </svg>
+      </div>
+      <div>
+        <h3>Live explorer</h3>
+        <p>Pick any variable, pressure level, aggregation, and time range.
+        Click a single point for a time series, or draw a bounding box
+        for a regional spatial map. The plot is generated on the fly
+        from the underlying NetCDF data.</p>
+      </div>
+      <span class="go">Open explorer</span>
+    </a>
+
+    <a class="feature" href="gallery.html" style="color:inherit;text-decoration:none;">
+      <div class="icon" aria-hidden="true">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="7" height="7" rx="1"/>
+          <rect x="14" y="3" width="7" height="7" rx="1"/>
+          <rect x="3" y="14" width="7" height="7" rx="1"/>
+          <rect x="14" y="14" width="7" height="7" rx="1"/>
+        </svg>
+      </div>
+      <div>
+        <h3>Product gallery</h3>
+        <p>Browse every pre-rendered plot in the catalog. Filter by
+        variable, pressure level, aggregation, plot type, and year
+        range. Each card links to the full-resolution PNG.</p>
+      </div>
+      <span class="go">Browse gallery</span>
+    </a>
+
+    <a class="feature" href="admin.html" style="color:inherit;text-decoration:none;">
+      <div class="icon" aria-hidden="true">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 12a9 9 0 1 1-3-6.7"/>
+          <path d="M21 4v5h-5"/>
+        </svg>
+      </div>
+      <div>
+        <h3>Update console</h3>
+        <p>Trigger an incremental data refresh from the browser. The
+        server pulls only the new days since the last run, merges them
+        into the existing aggregations, and uploads new plots to
+        Supabase. No shell access required.</p>
+      </div>
+      <span class="go">Open admin</span>
+    </a>
+  </div>
+</section>
+
+<!-- ── Featured products ──────────────────────────────────────── -->
+<section aria-labelledby="featured-h">
+  <div class="section-head">
+    <div>
+      <p class="kicker">Latest from the pipeline</p>
+      <h2 id="featured-h">Recently published products</h2>
+    </div>
+    <p>Pulled live from the Supabase catalog. <a href="gallery.html">See the full gallery &rarr;</a></p>
+  </div>
+
+  <div class="sample-grid" id="sample-grid">
+    <div class="sample-empty">Loading recent products…</div>
+  </div>
+</section>
+
+<!-- ── Data sources ────────────────────────────────────────────── -->
+<section id="sources" aria-labelledby="sources-h">
+  <div class="section-head">
+    <div>
+      <p class="kicker">Where the data comes from</p>
+      <h2 id="sources-h">Data sources</h2>
+    </div>
+    <p>Two authoritative global reanalysis products, fetched directly from their publishers.</p>
+  </div>
+
+  <div class="sources">
+    <div class="src">
+      <div class="logo">NOAA</div>
+      <div>
+        <h4>NCEP/NCAR Reanalysis I</h4>
+        <p>Daily global pressure-level and surface reanalysis from
+        NOAA's Physical Sciences Laboratory. Eight decades of data,
+        from 1948 to the present, on a 2.5&deg; grid.</p>
+        <p class="meta-line">
+          Variables: <b>shum, uwnd, vwnd, air, omega, hgt, rhum</b> (pressure) &middot;
+          <b>slp, pres.sfc, pr_wtr.eatm, *.sig995</b> (surface)<br>
+          Source: <a href="https://downloads.psl.noaa.gov/Datasets/ncep.reanalysis/Dailies/" target="_blank" rel="noopener">downloads.psl.noaa.gov</a>
+        </p>
+      </div>
+    </div>
+
+    <div class="src">
+      <div class="logo">CHIRPS</div>
+      <div>
+        <h4>CHIRPS v2.0</h4>
+        <p>Climate Hazards Group InfraRed Precipitation with Station
+        data. Daily global rainfall on a 0.25&deg; grid, from 1981 to
+        near-present, blending satellite imagery with ground stations.</p>
+        <p class="meta-line">
+          Variable: <b>precip</b> (mm/day, &minus;50&deg;S to 50&deg;N)<br>
+          Source: <a href="https://data.chc.ucsb.edu/products/CHIRPS-2.0/" target="_blank" rel="noopener">data.chc.ucsb.edu</a>
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Capabilities ──────────────────────────────────────────── -->
+<section aria-labelledby="caps-h">
+  <div class="section-head">
+    <div>
+      <p class="kicker">What the platform handles</p>
+      <h2 id="caps-h">Capabilities</h2>
+    </div>
+    <p>Everything a researcher or extension officer needs to work with the data, in one place.</p>
+  </div>
+
+  <div class="caps">
+    <div class="cap">
+      <div class="check">✓</div>
+      <div class="ctext"><strong>17 variables across 2 data sources</strong>
+      <span>Pressure-level reanalysis, surface variables, satellite rainfall.</span></div>
+    </div>
+    <div class="cap">
+      <div class="check">✓</div>
+      <div class="ctext"><strong>17 standard pressure levels</strong>
+      <span>1000 mb down to 10 mb, per-variable (humidity stops at 300 mb, omega at 100 mb).</span></div>
+    </div>
+    <div class="cap">
+      <div class="check">✓</div>
+      <div class="ctext"><strong>8 temporal aggregations</strong>
+      <span>Daily, monthly, seasonal, annual, dekad, pentad, climatology, anomaly.</span></div>
+    </div>
+    <div class="cap">
+      <div class="check">✓</div>
+      <div class="ctext"><strong>3 plot types per combination</strong>
+      <span>Spatial maps, time series, and Hovmoller (longitude&ndash;time) diagrams.</span></div>
+    </div>
+    <div class="cap">
+      <div class="check">✓</div>
+      <div class="ctext"><strong>Any point or region on Earth</strong>
+      <span>Click a single grid cell for a time series, or draw any bounding box for a regional map.</span></div>
+    </div>
+    <div class="cap">
+      <div class="check">✓</div>
+      <div class="ctext"><strong>Daily incremental updates</strong>
+      <span>Cron + admin button pull only new days, merging them into the existing catalog in seconds.</span></div>
+    </div>
+    <div class="cap">
+      <div class="check">✓</div>
+      <div class="ctext"><strong>One-time full backfill</strong>
+      <span>Process the full historical record (1948&ndash;present for NOAA, 1981&ndash;present for CHIRPS) with a single command.</span></div>
+    </div>
+    <div class="cap">
+      <div class="check">✓</div>
+      <div class="ctext"><strong>Resumable &amp; idempotent</strong>
+      <span>Re-running the pipeline skips files it already produced, so interrupted runs pick up where they left off.</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Footer ────────────────────────────────────────────────── -->
+<footer>
+  <div class="foot-inner">
+    <div class="foot">
+      <h5>Agromet &middot; Reanalysis</h5>
+      <p class="small">
+        A unified pipeline for NOAA NCEP reanalysis and CHIRPS rainfall
+        over East Africa. Spatial maps, time series, and Hovmoller
+        diagrams for agrometeorological research and extension work.
+        Built with <code>CDO</code>, <code>xarray</code>,
+        <code>matplotlib</code>, <code>FastAPI</code>, and
+        <code>Supabase</code>.
+      </p>
+    </div>
+    <div class="foot">
+      <h5>Pages</h5>
+      <ul>
+        <li><a href="index.html">Home</a></li>
+        <li><a href="gallery.html">Product gallery</a></li>
+        <li><a href="explorer.html">Live explorer</a></li>
+        <li><a href="admin.html">Update console</a></li>
+      </ul>
+    </div>
+    <div class="foot">
+      <h5>Data</h5>
+      <ul>
+        <li><a href="https://downloads.psl.noaa.gov/Datasets/ncep.reanalysis/Dailies/" target="_blank" rel="noopener">NOAA PSL reanalysis</a></li>
+        <li><a href="https://data.chc.ucsb.edu/products/CHIRPS-2.0/" target="_blank" rel="noopener">CHIRPS v2.0</a></li>
+        <li><a href="supabase_schema.sql">Supabase schema</a></li>
+        <li><a href="https://supabase.com" target="_blank" rel="noopener">Powered by Supabase</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="foot-bottom">
+    <span>Agromet database website</span>
+    <span id="foot-status">Live status: connecting…</span>
+  </div>
+</footer>
+
+<!-- ── Live data hydration ──────────────────────────────────── -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+(() => {
+  // ── Configure these two values for your project ──────────────
+  // Same as gallery.html -- the anon key is safe to expose publicly.
+  const SUPABASE_URL = "https://gmnfstpljazjoorgyovu.supabase.co";
+  const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdtbmZzdHBsamF6am9vcmd5b3Z1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgwNzA4NzYsImV4cCI6MjEwMzY0Njg3Nn0.j54hK9Ez9jR-OQqyVhIpascoH7aNb46BDWoN0Tkg2O4";
+  // --------------------------------------------------------------
+
+  const VAR_LABELS = {
+    shum: "Specific Humidity", uwnd: "U-Wind", vwnd: "V-Wind",
+    air: "Air Temperature", omega: "Vertical Velocity", hgt: "Geopotential Height",
+    rhum: "Relative Humidity", slp: "Sea Level Pressure",
+    "pres.sfc": "Surface Pressure", "pr_wtr.eatm": "Precipitable Water",
+    "air.sig995": "Surface Air Temperature", "uwnd.sig995": "Surface U-Wind",
+    "vwnd.sig995": "Surface V-Wind", "rhum.sig995": "Surface Relative Humidity",
+    "omega.sig995": "Surface Vertical Velocity",
+    precip: "Rainfall (CHIRPS)",
+  };
+
+  const els = {
+    count: document.getElementById("stat-count"),
+    countSub: document.getElementById("stat-count-sub"),
+    vars: document.getElementById("stat-vars"),
+    latest: document.getElementById("stat-latest"),
+    years: document.getElementById("stat-years"),
+    sampleGrid: document.getElementById("sample-grid"),
+    footStatus: document.getElementById("foot-status"),
+  };
+
+  function fmtDate(iso) {
+    if (!iso) return "—";
+    const d = new Date(iso);
+    if (isNaN(d)) return "—";
+    return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+  }
+  function fmtNum(n) {
+    if (n == null) return "—";
+    return n.toLocaleString();
+  }
+  function escapeHtml(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+
+  async function loadStats() {
+    // If the user hasn't configured the Supabase keys yet, fall back
+    // to a graceful "unconfigured" state instead of erroring.
+    if (SUPABASE_URL.includes("YOUR-PROJECT-REF")) {
+      els.count.textContent = "—";
+      els.countSub.innerHTML = "Configure <code>SUPABASE_URL</code> in this file to enable live stats.";
+      els.vars.textContent = "—";
+      els.latest.textContent = "—";
+      els.years.textContent = "—";
+      els.footStatus.textContent = "Live status: not configured (edit SUPABASE_URL in index.html)";
+      els.sampleGrid.innerHTML =
+        '<div class="sample-empty">Live products will appear here once <code>SUPABASE_URL</code> and <code>SUPABASE_ANON_KEY</code> are set in <code>index.html</code>.</div>';
+      return;
+    }
+
+    const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // Total count (use head-only request to keep this cheap)
+    const countRes = await client
+      .from("noaa_products")
+      .select("*", { count: "exact", head: true });
+    if (countRes.error) throw countRes.error;
+    const total = countRes.count ?? 0;
+    els.count.textContent = fmtNum(total);
+    els.countSub.textContent = total > 0
+      ? `${fmtNum(total)} pre-rendered plot${total === 1 ? "" : "s"} ready to view`
+      : "No products uploaded yet — run the pipeline to populate";
+
+    // Featured products (latest 6)
+    const recentRes = await client
+      .from("noaa_products")
+      .select("var, level_label, aggr, plot_type, lat, lon, public_url, start_year, end_year, created_at")
+      .order("created_at", { ascending: false })
+      .limit(6);
+    if (recentRes.error) throw recentRes.error;
+    const recent = recentRes.data || [];
+    renderSamples(recent);
+
+    // Distinct variables and year range across the whole catalog.
+    // We pull a narrow projection (var, start_year, end_year) so this
+    // is a few hundred KB even for 10K+ products. Supabase caps
+    // queries at 1000 rows by default; if you have more, see the
+    // comment below on switching to a stored procedure.
+    const metaRes = await client
+      .from("noaa_products")
+      .select("var, start_year, end_year")
+      .order("var");
+    if (metaRes.error) throw metaRes.error;
+    const meta = metaRes.data || [];
+    const uniqueVars = new Set(meta.map(p => p.var));
+    els.vars.textContent = uniqueVars.size;
+    if (recent.length) {
+      els.latest.textContent = fmtDate(recent[0].created_at);
+    } else {
+      els.latest.textContent = "—";
+    }
+    const starts = meta.map(p => p.start_year).filter(v => v != null);
+    const ends   = meta.map(p => p.end_year).filter(v => v != null);
+    if (starts.length && ends.length) {
+      const lo = Math.min(...starts), hi = Math.max(...ends);
+      els.years.textContent = lo === hi ? `${lo}` : `${lo} – ${hi}`;
+    } else {
+      els.years.textContent = "—";
+    }
+
+    els.footStatus.textContent = "Live status: connected to Supabase";
+  }
+
+  function renderSamples(products) {
+    if (!products.length) {
+      els.sampleGrid.innerHTML =
+        '<div class="sample-empty">No products in the catalog yet. Run <code>all_agro_dataproces.sh all</code> to populate it, then re-upload via <code>all_python_agroproducts.py upload</code>.</div>';
+      return;
+    }
+    els.sampleGrid.innerHTML = products.map(p => {
+      const label = VAR_LABELS[p.var] || p.var;
+      const lvl = p.level_label
+        ? (/^\d+$/.test(p.level_label) ? `${p.level_label} hPa` : p.level_label)
+        : "";
+      const years = (p.start_year && p.end_year)
+        ? (p.start_year === p.end_year ? `${p.start_year}` : `${p.start_year}–${p.end_year}`)
+        : "";
+      return `
+        <a class="sample" href="${p.public_url}" target="_blank" rel="noopener" style="text-decoration:none;color:inherit;">
+          <img src="${p.public_url}" alt="${escapeHtml(label)} ${escapeHtml(p.plot_type)} plot" loading="lazy" />
+          <div class="meta">
+            <div class="title">${escapeHtml(label)}${lvl ? " · " + escapeHtml(lvl) : ""}</div>
+            <div class="tags">
+              <span class="tag plot-type">${escapeHtml(p.plot_type)}</span>
+              <span class="tag">${escapeHtml(p.aggr)}</span>
+              ${years ? `<span class="tag">${escapeHtml(years)}</span>` : ""}
+            </div>
+          </div>
+        </a>
+      `;
+    }).join("");
+  }
+
+  loadStats().catch(err => {
+    console.error("Failed to load live stats:", err);
+    els.count.textContent = "—";
+    els.countSub.textContent = "Could not reach Supabase. Check the URL and anon key.";
+    els.vars.textContent = "—";
+    els.latest.textContent = "—";
+    els.years.textContent = "—";
+    els.sampleGrid.innerHTML =
+      '<div class="sample-empty">Could not load recent products. Verify the Supabase URL and anon key in <code>index.html</code> match your project.</div>';
+    els.footStatus.textContent = "Live status: error — see browser console";
+  });
+})();
+</script>
+</body>
+</html>
 
