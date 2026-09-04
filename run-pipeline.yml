@@ -1,0 +1,227 @@
+name: Run Agromet Pipeline
+
+# This workflow runs the all_agro_dataproces.sh script on GitHub-hosted
+# runners. It supports two trigger modes:
+#
+#   1. Manual (workflow_dispatch): pick a subcommand, var, level, year
+#      range from the Actions tab and click "Run workflow". Best for
+#      ad-hoc runs and debugging.
+#
+#   2. Scheduled (cron): runs the `update` subcommand every day at
+#      04:00 UTC = 07:00 EAT. Pulls only new CHIRPS days, merges them
+#      into the existing aggregations, re-uploads plots to Supabase.
+#
+# Required secrets (Settings -> Secrets and variables -> Actions):
+#   SUPABASE_URL          - your project URL
+#   SUPABASE_SERVICE_KEY  - the service_role key (NOT anon)
+
+on:
+  # Manual trigger from the Actions tab
+  workflow_dispatch:
+    inputs:
+      subcommand:
+        description: "Which subcommand to run"
+        required: true
+        type: choice
+        default: "update"
+        options:
+          - noaa
+          - chirps
+          - all
+          - update
+      var:
+        description: "NOAA variable (only used if subcommand=noaa)"
+        required: false
+        type: string
+        default: "shum"
+      level:
+        description: "NOAA pressure level (only used if subcommand=noaa)"
+        required: false
+        type: string
+        default: "850"
+      start_year:
+        description: "Start year, or 'all' for dataset start"
+        required: false
+        type: string
+        default: "all"
+      end_year:
+        description: "End year, or 'all' for latest available"
+        required: false
+        type: string
+        default: "all"
+      aggr:
+        description: "Comma-separated aggregations (empty = subcommand default)"
+        required: false
+        type: string
+        default: ""
+      clean_raw:
+        description: "Delete raw downloads after aggregation to save disk"
+        required: false
+        type: boolean
+        default: false
+      skip_static_plots:
+        description: "Skip per-point sample PNG generation (data only, much faster)"
+        required: false
+        type: boolean
+        default: true
+
+  # Scheduled daily run -- the incremental update is the right default
+  # for cron: it's cheap (only downloads new CHIRPS data) and idempotent.
+  schedule:
+    # 01:00 UTC = 04:00 East Africa Time (UTC+3)
+    - cron: "0 1 * * *"
+
+# Don't run the scheduled job on a fork (would leak secrets).
+# The workflow_dispatch path is OK to keep so people can test forks.
+concurrency:
+  group: agromet-pipeline
+  cancel-in-progress: false   # let a slow run finish; don't kill it
+
+jobs:
+  run-pipeline:
+    # Skip the scheduled run on forks; only run on the main repo.
+  # Replace YOUR-USERNAME/YOUR-REPO with your actual repo path,
+  # or just remove this `if:` line if you don't need fork protection.
+    if: github.event_name != 'schedule' || github.repository == 'YOUR-USERNAME/YOUR-REPO'
+    runs-on: ubuntu-latest
+    timeout-minutes: 360   # 6 hours max for big runs
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Show runner info
+        run: |
+          echo "Runner: $(uname -a)"
+          echo "Disk free: $(df -h . | tail -1 | awk '{print $4}')"
+          echo "Date: $(date -u)"
+
+      - name: Install system dependencies
+        # cdo = Climate Data Operators, nco = netCDF Operators
+        # libproj-dev / libgeos-dev are needed to build cartopy from source
+        # if it's not already cached.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cdo nco wget curl \
+            libproj-dev proj-bin libgeos-dev libnetcdf-dev
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # Pin the install to known-good versions for reproducibility.
+          # If a newer version breaks things, you'll know which upgrade
+          # did it instead of "something changed".
+          pip install \
+            "xarray>=2023.1" \
+            "matplotlib>=3.6" \
+            "numpy>=1.23" \
+            "pandas>=2.0" \
+            "scipy>=1.10" \
+            "cartopy>=0.21" \
+            "netCDF4>=1.6" \
+            "supabase>=2.0" \
+            "fastapi>=0.100" \
+            "uvicorn[standard]>=0.23"
+
+      - name: Build subcommand args
+        id: build-args
+        env:
+          SUB: ${{ github.event.inputs.subcommand || 'update' }}
+          VAR: ${{ github.event.inputs.var || 'shum' }}
+          LEVEL: ${{ github.event.inputs.level || '850' }}
+          START: ${{ github.event.inputs.start_year || 'all' }}
+          END: ${{ github.event.inputs.end_year || 'all' }}
+          AGGR: ${{ github.event.inputs.aggr || '' }}
+          CLEAN: ${{ github.event.inputs.clean_raw || false }}
+          SKIP_PLOTS: ${{ github.event.inputs.skip_static_plots || true }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          ARGS=("$SUB")
+          if [ "$SUB" = "noaa" ]; then
+            ARGS+=(--var "$VAR" --level "$LEVEL" --start "$START" --end "$END")
+            [ -n "$AGGR" ] && ARGS+=(--aggr "$AGGR")
+            $CLEAN  && ARGS+=(--clean-raw true)
+            if $SKIP_PLOTS; then
+              ARGS+=(--plot false)
+            else
+              ARGS+=(--plot true)
+            fi
+          elif [ "$SUB" = "chirps" ]; then
+            ARGS+=(--start "$START" --end "$END")
+            [ -n "$AGGR" ] && ARGS+=(--aggr "$AGGR")
+            $CLEAN && ARGS+=(--clean-raw true)
+            if $SKIP_PLOTS; then
+              ARGS+=(--plot false)
+            else
+              ARGS+=(--plot true)
+            fi
+          elif [ "$SUB" = "all" ]; then
+            ARGS+=(--start "$START" --end "$END")
+            [ -n "$AGGR" ] && ARGS+=(--aggr "$AGGR")
+            $CLEAN && ARGS+=(--clean-raw true)
+            $SKIP_PLOTS && ARGS+=(--skip-static-plots)
+          fi
+
+          # Join the array with a separator that survives the
+          # GITHUB_ENV round-trip without quoting issues.
+          printf '%s\n' "${ARGS[@]}" > /tmp/pipeline_args.txt
+          echo "ARGS<<EOF" >> "$GITHUB_ENV"
+          cat /tmp/pipeline_args.txt >> "$GITHUB_ENV"
+          echo "EOF" >> "$GITHUB_ENV"
+
+          echo "Built command: bash all_agro_dataproces.sh ${ARGS[*]}"
+
+      - name: Run the pipeline
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          NOAA_OUTDIR: ${{ github.workspace }}/NOAA
+          PYTHONUNBUFFERED: "1"
+        run: |
+          chmod +x all_agro_dataproces.sh
+          # Read the args built in the previous step.
+          # grep -v '^EOF$' strips the heredoc marker.
+          mapfile -t CMD < <(echo "$ARGS" | grep -v '^EOF$')
+          echo "Executing: bash all_agro_dataproces.sh ${CMD[*]}"
+          bash all_agro_dataproces.sh "${CMD[@]}" 2>&1 | tee pipeline.log
+
+      - name: Upload log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pipeline-log-${{ github.run_id }}
+          path: pipeline.log
+          retention-days: 7
+
+      - name: Upload log on success
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pipeline-log-${{ github.run_id }}
+          path: pipeline.log
+          retention-days: 3
+
+      - name: Show summary
+        if: always()
+        run: |
+          echo "## Pipeline run summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Trigger:** ${{ github.event_name }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Ref:** ${{ github.ref }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Commit:** ${{ github.sha }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Result:** ${{ job.status }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          if [ -f pipeline.log ]; then
+            echo "### Last 30 lines of output" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            tail -n 30 pipeline.log >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi
