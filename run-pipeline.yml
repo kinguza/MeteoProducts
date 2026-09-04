@@ -82,7 +82,7 @@ jobs:
     # Skip the scheduled run on forks; only run on the main repo.
   # Replace YOUR-USERNAME/YOUR-REPO with your actual repo path,
   # or just remove this `if:` line if you don't need fork protection.
-    if: github.event_name != 'schedule' || github.repository == 'YOUR-USERNAME/YOUR-REPO'
+    if: github.event_name != 'schedule' || github.repository == 'kinguza/MeteoProducts'
     runs-on: ubuntu-latest
     timeout-minutes: 360   # 6 hours max for big runs
 
