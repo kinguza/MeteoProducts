@@ -333,7 +333,8 @@ write_plot_script_link() {
     # Python module is self-contained, so there's nothing to symlink.
     :
 }
-
+export SUPABASE_URL="https://gmnfstpljazjoorgyovu.supabase.co"
+export SUPABASE_SERVICE_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdtbmZzdHBsamF6am9vcmd5b3Z1Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4ODA3MDg3NiwiZXhwIjoyMTAzNjQ2ODc2fQ.N396DI2y4zsnWrPzb2kl6W5Ml2d7Gq9-M-Xkehukaw0"
 # Run the upload step if both the script and credentials are available.
 run_upload_step() {
     local PLOT_DIR="$1" VAR="$2" LEVEL="$3" \
