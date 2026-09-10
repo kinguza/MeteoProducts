@@ -105,13 +105,17 @@ jobs:
           sudo apt-get install -y \
             cdo nco wget curl \
             libproj-dev proj-bin libgeos-dev libnetcdf-dev
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: "pip"
-
+          cache-dependency-path: pipeline/requirements.txt
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r pipeline/requirements.txt
+          
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
