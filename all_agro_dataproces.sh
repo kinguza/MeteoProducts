@@ -520,8 +520,12 @@ run_noaa() {
     #fi
     #
 #####################################################
-# Minimum acceptable file size in bytes (tune per variable/resolution)
+#####################################################
+    # Minimum acceptable file size in bytes (tune per variable/resolution)
     MIN_FILE_SIZE=$((1024 * 1024))  # 1 MB, adjust as needed
+
+    local DOWNLOAD_COUNT=0 SKIP_COUNT=0 FAIL_COUNT=0
+    local FAILED_YEARS=()
 
     is_valid_file() {
         local file="$1"
@@ -536,12 +540,9 @@ run_noaa() {
         fi
 
         # 2. Cheap structural check: does it even look like NetCDF/HDF5?
-        #    (avoids depending on cdo alone; ncdump/h5dump can be a fallback too)
         if ! cdo -s info "$file" 2>/tmp/cdo_err.log >/dev/null; then
             log_warn "cdo could not read ${file} (size looked fine: ${size} bytes)."
             log_warn "cdo said: $(tail -n 1 /tmp/cdo_err.log)"
-            # Size is fine, cdo failed for some other reason -- don't nuke the file blindly.
-            # Treat as valid but flag for manual review instead of forcing a re-download.
             return 0
         fi
 
@@ -576,6 +577,7 @@ run_noaa() {
             (( FAIL_COUNT++ )) || true
         fi
     done
+#####################################################
 #####################################################    
     # Step 2: Merge
     log_section "Step 2: Merging Daily Files"
