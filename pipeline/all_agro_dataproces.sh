@@ -475,22 +475,94 @@ run_noaa() {
     fi
 
     # Step 1: Download
-    log_section "Step 1: Downloading ${VAR} Daily Data (${START_YEAR}-${END_YEAR})"
-    local DOWNLOAD_COUNT=0 SKIP_COUNT=0 FAIL_COUNT=0
-    local FAILED_YEARS=()
+    #log_section "Step 1: Downloading ${VAR} Daily Data (${START_YEAR}-${END_YEAR})"
+    #local DOWNLOAD_COUNT=0 SKIP_COUNT=0 FAIL_COUNT=0
+    #local FAILED_YEARS=()
+    #for YEAR in $(seq "$START_YEAR" "$END_YEAR"); do
+    #    local URL="${BASE_URL}/${VAR}.${YEAR}.nc"
+    #    local OUTFILE="${RAW_DIR}/${VAR}.${YEAR}.nc"
+    #    if [[ -f "$OUTFILE" ]]; then
+    #        if cdo -s info "$OUTFILE" &>/dev/null; then
+    #            log_info "Skipping ${YEAR} -- file exists and is valid."
+    #            (( SKIP_COUNT++ )) || true
+    #            continue
+    #        else
+    #            log_warn "${YEAR} file exists but appears corrupt. Re-downloading..."
+    #            rm -f "$OUTFILE"
+    #        fi
+    #    fi
+    #    log_info "Downloading ${VAR} for ${YEAR}..."
+    #    if wget -q --timeout=60 --tries=3 --retry-connrefused \
+    #            --progress=bar:force \
+    #            -O "$OUTFILE" "$URL" 2>&1; then
+    #        log_success "Downloaded ${YEAR}"
+    #        (( DOWNLOAD_COUNT++ )) || true
+    #    else
+    #        log_error "Failed to download ${YEAR} from: ${URL}"
+    #        rm -f "$OUTFILE"
+    #        FAILED_YEARS+=("$YEAR")
+    #        (( FAIL_COUNT++ )) || true
+    #    fi
+    #done
+    #echo ""
+    #log_info "Download Summary:"
+    #log_info "  Downloaded : ${DOWNLOAD_COUNT}"
+    #log_info "  Skipped    : ${SKIP_COUNT}"
+    #log_info "  Failed     : ${FAIL_COUNT}"
+    #if [[ ${#FAILED_YEARS[@]} -gt 0 ]]; then
+    #    log_warn "Failed years: ${FAILED_YEARS[*]}"
+    #fi
+    #
+    #local AVAIL_FILES=( "${RAW_DIR}/${VAR}".*.nc )
+    #if [[ ${#AVAIL_FILES[@]} -eq 0 ]]; then
+    #    log_error "No files available to merge. Exiting."
+    #    exit 1
+    #fi
+    #
+#####################################################
+# Minimum acceptable file size in bytes (tune per variable/resolution)
+    MIN_FILE_SIZE=$((1024 * 1024))  # 1 MB, adjust as needed
+
+    is_valid_file() {
+        local file="$1"
+        local size
+
+        # 1. Existence + non-zero size check
+        [[ -f "$file" ]] || return 1
+        size=$(stat -c%s "$file" 2>/dev/null || stat -f%z "$file" 2>/dev/null)
+        if [[ -z "$size" || "$size" -lt "$MIN_FILE_SIZE" ]]; then
+            log_warn "${file} is smaller than expected (${size:-0} bytes) -- treating as invalid."
+            return 1
+        fi
+
+        # 2. Cheap structural check: does it even look like NetCDF/HDF5?
+        #    (avoids depending on cdo alone; ncdump/h5dump can be a fallback too)
+        if ! cdo -s info "$file" 2>/tmp/cdo_err.log >/dev/null; then
+            log_warn "cdo could not read ${file} (size looked fine: ${size} bytes)."
+            log_warn "cdo said: $(tail -n 1 /tmp/cdo_err.log)"
+            # Size is fine, cdo failed for some other reason -- don't nuke the file blindly.
+            # Treat as valid but flag for manual review instead of forcing a re-download.
+            return 0
+        fi
+
+        return 0
+    }
+
     for YEAR in $(seq "$START_YEAR" "$END_YEAR"); do
         local URL="${BASE_URL}/${VAR}.${YEAR}.nc"
         local OUTFILE="${RAW_DIR}/${VAR}.${YEAR}.nc"
+
         if [[ -f "$OUTFILE" ]]; then
-            if cdo -s info "$OUTFILE" &>/dev/null; then
-                log_info "Skipping ${YEAR} -- file exists and is valid."
+            if is_valid_file "$OUTFILE"; then
+                log_info "Skipping ${YEAR} -- file exists and passes checks."
                 (( SKIP_COUNT++ )) || true
                 continue
             else
-                log_warn "${YEAR} file exists but appears corrupt. Re-downloading..."
+                log_warn "${YEAR} file failed size/validity check. Re-downloading..."
                 rm -f "$OUTFILE"
             fi
         fi
+
         log_info "Downloading ${VAR} for ${YEAR}..."
         if wget -q --timeout=60 --tries=3 --retry-connrefused \
                 --progress=bar:force \
@@ -504,21 +576,7 @@ run_noaa() {
             (( FAIL_COUNT++ )) || true
         fi
     done
-    echo ""
-    log_info "Download Summary:"
-    log_info "  Downloaded : ${DOWNLOAD_COUNT}"
-    log_info "  Skipped    : ${SKIP_COUNT}"
-    log_info "  Failed     : ${FAIL_COUNT}"
-    if [[ ${#FAILED_YEARS[@]} -gt 0 ]]; then
-        log_warn "Failed years: ${FAILED_YEARS[*]}"
-    fi
-
-    local AVAIL_FILES=( "${RAW_DIR}/${VAR}".*.nc )
-    if [[ ${#AVAIL_FILES[@]} -eq 0 ]]; then
-        log_error "No files available to merge. Exiting."
-        exit 1
-    fi
-
+#####################################################    
     # Step 2: Merge
     log_section "Step 2: Merging Daily Files"
     if [[ -f "$MERGED_FILE" ]]; then
