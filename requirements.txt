@@ -1,0 +1,10 @@
+xarray>=2023.1
+matplotlib>=3.6
+numpy>=1.23
+pandas>=2.0
+scipy>=1.10
+cartopy>=0.21
+netCDF4>=1.6
+supabase>=2.0
+fastapi>=0.100
+uvicorn[standard]>=0.23
