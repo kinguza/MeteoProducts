@@ -162,7 +162,14 @@ jobs:
           echo "EOF" >> "$GITHUB_ENV"
 
           echo "Built command: bash all_agro_dataproces.sh ${ARGS[*]}"
-
+      - name: Restore previous pipeline data
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            NOAA
+          key: agromet-data-${{ github.run_id }}
+          restore-keys: |
+            agromet-data-
       - name: Run the pipeline
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -176,7 +183,13 @@ jobs:
           mapfile -t CMD < <(echo "$ARGS" | grep -v '^EOF$')
           echo "Executing: bash all_agro_dataproces.sh ${CMD[*]}"
           bash all_agro_dataproces.sh "${CMD[@]}" 2>&1 | tee pipeline.log
-
+      - name: Save pipeline data
+        if: success()
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            NOAA
+          key: agromet-data-${{ github.run_id }}
       - name: Upload log on failure
         if: failure()
         uses: actions/upload-artifact@v4
@@ -209,4 +222,5 @@ jobs:
             echo '```' >> "$GITHUB_STEP_SUMMARY"
             tail -n 30 pipeline.log >> "$GITHUB_STEP_SUMMARY"
             echo '```' >> "$GITHUB_STEP_SUMMARY"
+            
           fi
