@@ -63,7 +63,7 @@ on:
         description: "Skip per-point sample PNG generation (data only, much faster)"
         required: false
         type: boolean
-        default: true
+        default: false #true
 
   # Scheduled daily run -- the incremental update is the right default
   # for cron: it's cheap (only downloads new CHIRPS data) and idempotent.
@@ -125,7 +125,7 @@ jobs:
           END: ${{ github.event.inputs.end_year || 'all' }}
           AGGR: ${{ github.event.inputs.aggr || '' }}
           CLEAN: ${{ github.event.inputs.clean_raw || false }}
-          SKIP_PLOTS: ${{ github.event.inputs.skip_static_plots || true }}
+          SKIP_PLOTS: ${{ github.event.inputs.skip_static_plots || false }}
           EVENT_NAME: ${{ github.event_name }}
         run: |
           ARGS=("$SUB")
