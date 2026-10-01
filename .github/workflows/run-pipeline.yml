@@ -43,12 +43,12 @@ on:
         description: "Start year, or 'all' for dataset start"
         required: false
         type: string
-        default: "all"
+        default: "2024" #"all"
       end_year:
         description: "End year, or 'all' for latest available"
         required: false
         type: string
-        default: "all"
+        default: "2024" #"all"
       aggr:
         description: "Comma-separated aggregations (empty = subcommand default)"
         required: false
