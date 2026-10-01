@@ -125,7 +125,8 @@ jobs:
           END: ${{ github.event.inputs.end_year || 'all' }}
           AGGR: ${{ github.event.inputs.aggr || '' }}
           CLEAN: ${{ github.event.inputs.clean_raw || false }}
-          SKIP_PLOTS: ${{ github.event.inputs.skip_static_plots || false }}
+          #SKIP_PLOTS: ${{ github.event.inputs.skip_static_plots || false }}
+          SKIP_PLOTS: ${{ github.event_name == 'schedule' && 'false' || github.event.inputs.skip_static_plots || 'true' }}
           EVENT_NAME: ${{ github.event_name }}
         run: |
           ARGS=("$SUB")
@@ -151,6 +152,8 @@ jobs:
             ARGS+=(--start "$START" --end "$END")
             [ -n "$AGGR" ] && ARGS+=(--aggr "$AGGR")
             $CLEAN && ARGS+=(--clean-raw true)
+            $SKIP_PLOTS && ARGS+=(--skip-static-plots)
+          elif [ "$SUB" = "update" ]; then
             $SKIP_PLOTS && ARGS+=(--skip-static-plots)
           fi
 
